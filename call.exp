@@ -1,0 +1,48 @@
+#!/usr/bin/expect -f
+# This script can be run on it's own to check a modem or from check-modem.sh.
+
+if {$argc < 1} {
+    puts "usage: $argv0 phone-number \[site-name\]"
+    puts "Zero exit status indicates successful connection."
+    puts "Connection errors are sent to stderr."
+    exit 1
+}
+set phone [lindex $argv 0]
+set site  [lindex $argv 1]
+
+proc die {message} {
+    send_error "ERROR ($::site $::phone): $message\n"
+    hangup
+    exit 1
+}
+
+proc hangup {} {
+    # terminate cu session
+    send "~.\r"
+    wait
+}
+
+spawn cu -e -l /dev/ttyS0
+set timeout 10
+expect {
+    default       { die "Failed to open local tty via cu" }
+    "Connected."
+}
+
+set timeout 60
+send   "ATZ\r"
+expect {
+    default       { die "Failed to reset local modem: check cabling & power" }
+    "OK"
+}
+
+send   "ATDT9,$phone\r"
+expect {
+    "CONNECT"     { send_user "Connected successfully"; hangup; exit 0 }
+    "NO DIALTONE" { die "No dialtone, check phone line" }
+    "NO CARRIER"  { die "No carrier" }
+    "BUSY"        { die "Phone number busy" }
+    default       { die "Timed out calling" }
+}
+# NOT REACHED
+die "Unexpectedly reached end of expect script."
